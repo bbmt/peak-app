@@ -1,10 +1,9 @@
 import streamlit as st
 import numpy as np
 import plotly.graph_objects as go
-import os
-import csv
 from datetime import datetime
 import uuid
+from supabase import create_client, Client
 
 # ==========================================
 # Configuração da Página
@@ -12,12 +11,27 @@ import uuid
 st.set_page_config(page_title="Peak Identification", layout="wide")
 
 # ==========================================
+# Ligação ao Supabase
+# ==========================================
+@st.cache_resource
+def iniciar_conexao() -> Client:
+    # Acede às chaves configuradas nos Secrets do Streamlit
+    url = st.secrets["SUPABASE_URL"]
+    key = st.secrets["SUPABASE_KEY"]
+    return create_client(url, key)
+
+try:
+    supabase = iniciar_conexao()
+except Exception as e:
+    st.error("Erro ao conectar à base de dados. Verifique os seus Secrets no Streamlit Cloud.")
+    st.stop()
+
+# ==========================================
 # Gerenciamento de Estado (Memória da Sessão)
 # ==========================================
 if "questionario_concluido" not in st.session_state:
     st.session_state.questionario_concluido = False
 
-# Gera um Hash único de 8 caracteres para anonimizar o usuário
 if "hash_pesquisador" not in st.session_state:
     st.session_state.hash_pesquisador = str(uuid.uuid4())[:8].upper()
 
@@ -32,7 +46,8 @@ if "espectro_atual" not in st.session_state:
 # ==========================================
 @st.cache_data
 def carregar_dados():
-    dados_ruidosos = np.load('espectros_complexos_ruidosos.npy')
+    # Certifique-se de que o nome do ficheiro corresponde ao que tem no repositório
+    dados_ruidosos = np.load('espectros_complexos_ruidosos_ex50.npy')
     eixo_x = np.linspace(0, 1000, 1000)
     return dados_ruidosos, eixo_x
 
@@ -50,35 +65,18 @@ if not st.session_state.questionario_concluido:
     st.info(f"🔒 Your anonymous ID for this session is: **{st.session_state.hash_pesquisador}**")
     
     with st.form("form_perfil"):
-        
         col_form1, col_form2 = st.columns(2)
         
         with col_form1:
             titulacao = st.selectbox(
                 "What is your current academic qualification?",
-                [
-                    "Bachelor's Degree (in progress or completed)",
-                    "Master's Degree",
-                    "Ph.D."
-                ],
-                index=None,
-                placeholder="Select an option..."
+                ["Bachelor's Degree (in progress or completed)", "Master's Degree", "Ph.D."],
+                index=None, placeholder="Select an option..."
             )
-
             area_atuacao = st.selectbox(
                 "What is your primary field of research?",
-                [
-                    "Materials Science",
-                    "Chemistry",
-                    "Physics",
-                    "Engineering",
-                    "Biology",
-                    "Geology",
-                    "Other"
-                ],
-                index=None,
-                placeholder="Select an option or type a new one...",
-                accept_new_options=True 
+                ["Materials Science", "Chemistry", "Physics", "Engineering", "Biology", "Geology", "Other"],
+                index=None, placeholder="Select an option or type a new one...", accept_new_options=True 
             )
             
         with col_form2:
@@ -92,16 +90,9 @@ if not st.session_state.questionario_concluido:
                 ],
                 index=None
             )
-
             frequencia_ajuste = st.select_slider(
                 "How often do you perform curve fitting in your research?",
-                options=[
-                    "Never",
-                    "Rarely",
-                    "Monthly",
-                    "Weekly",
-                    "Daily"
-                ]
+                options=["Never", "Rarely", "Monthly", "Weekly", "Daily"]
             )
 
         botao_iniciar = st.form_submit_button("Save and Start Analysis")
@@ -110,7 +101,8 @@ if not st.session_state.questionario_concluido:
             if titulacao is None or area_atuacao is None or experiencia_espectroscopia is None:
                 st.error("Please, fill in all mandatory fields before proceeding.")
             else:
-                perfil = {
+                # Prepara os dados num dicionário
+                dados_perfil = {
                     "data_hora": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                     "hash_pesquisador": st.session_state.hash_pesquisador,
                     "titulacao": titulacao,
@@ -119,13 +111,8 @@ if not st.session_state.questionario_concluido:
                     "frequencia_ajuste": frequencia_ajuste
                 }
                 
-                arquivo_perfis = "perfil_pesquisadores.csv"
-                arquivo_existe = os.path.isfile(arquivo_perfis)
-                with open(arquivo_perfis, mode='a', newline='', encoding='utf-8') as f:
-                    writer = csv.DictWriter(f, fieldnames=perfil.keys())
-                    if not arquivo_existe:
-                        writer.writeheader()
-                    writer.writerow(perfil)
+                # Envia de forma segura para a tabela "perfis" no Supabase
+                supabase.table("perfis").insert(dados_perfil).execute()
                 
                 st.session_state.questionario_concluido = True
                 st.rerun()
@@ -135,7 +122,6 @@ if not st.session_state.questionario_concluido:
 # ==========================================
 else:
     st.title("🎯 Challenge: Lorentzian Peak Identification")
-    
     st.markdown(f"**Researcher (Anonymous ID):** `{st.session_state.hash_pesquisador}`")
     
     if st.button("Logout / New User"):
@@ -162,59 +148,46 @@ else:
     espectro_y = dados_ruidosos[espectro_selecionado]
 
     fig = go.Figure()
-    
-    # 1. Aumentamos o tamanho (size=8) e opacidade dos marcadores para facilitar o clique
     fig.add_trace(go.Scatter(
         x=eixo_x, y=np.real(espectro_y),
-        mode='lines+markers', 
-        marker=dict(size=8, opacity=0.4), 
-        name='Real Part', 
-        line=dict(color='#1f77b4')
+        mode='lines+markers', marker=dict(size=8, opacity=0.4),
+        name='Real Part', line=dict(color='#1f77b4')
     ))
-    
     fig.add_trace(go.Scatter(
         x=eixo_x, y=np.imag(espectro_y),
-        mode='lines', 
-        name='Imaginary Part', 
-        line=dict(color='#ff7f0e', dash='dot')
+        mode='lines', name='Imaginary Part', line=dict(color='#ff7f0e', dash='dot')
     ))
 
-    # Desenha as linhas dos picos já marcados
     for pico_x in st.session_state.picos_marcados:
         fig.add_vline(x=pico_x, line_width=2, line_dash="dash", line_color="red")
 
-    # ==========================================
-    # CORREÇÃO CRUCIAL AQUI
-    # ==========================================
     fig.update_layout(
         title=f"Spectrum {espectro_selecionado}",
         xaxis_title="X-Axis", yaxis_title="Intensity",
-        hovermode="closest", # <--- Alterado de 'x unified' para 'closest'
-        dragmode="zoom", 
-        clickmode="event+select"
+        hovermode="closest", dragmode="zoom", clickmode="event+select"
     )
 
     evento_grafico = st.plotly_chart(
-        fig, 
-        use_container_width=True, 
-        on_select="rerun", 
-        selection_mode="points", # Mantém a ordem para aceitar cliques em pontos
-        key=f"grafico_espectro_{espectro_selecionado}"
+        fig, use_container_width=True, on_select="rerun", 
+        selection_mode="points", key=f"graf_esp_{espectro_selecionado}"
     )
 
-    # Lógica de extração segura dos cliques
     if evento_grafico and len(evento_grafico.selection.points) > 0:
         teve_mudanca = False
-        for ponto in evento_grafico.selection.points:
-            x_val = ponto["x"]
-            if x_val not in st.session_state.picos_marcados:
+        try:
+            pontos = evento_grafico.selection.points
+        except AttributeError:
+            pontos = evento_grafico.get("selection", {}).get("points", [])
+            
+        for pt in pontos:
+            x_val = pt.get("x") if isinstance(pt, dict) else pt["x"]
+            if x_val is not None and x_val not in st.session_state.picos_marcados:
                 st.session_state.picos_marcados.add(x_val)
                 teve_mudanca = True
                 
         if teve_mudanca:
             st.rerun()
 
-    # ==========================================
     st.subheader("Summary of your Analysis")
     picos_ordenados = sorted(list(st.session_state.picos_marcados))
     
@@ -234,21 +207,17 @@ else:
             if not picos_ordenados:
                 st.warning("You haven't marked any peaks!")
             else:
-                resposta = {
+                # Prepara as respostas num dicionário para a tabela de respostas
+                dados_resposta = {
                     "data_hora": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                    "hash_pesquisador": st.session_state.hash_pesquisador, 
+                    "hash_pesquisador": st.session_state.hash_pesquisador,
                     "espectro_id": espectro_selecionado,
                     "qtd_picos": len(picos_ordenados),
                     "valores_x": str([round(p, 3) for p in picos_ordenados])
                 }
                 
-                arquivo_respostas = "coleta_pesquisadores.csv"
-                arquivo_existe = os.path.isfile(arquivo_respostas)
-                with open(arquivo_respostas, mode='a', newline='', encoding='utf-8') as f:
-                    writer = csv.DictWriter(f, fieldnames=resposta.keys())
-                    if not arquivo_existe:
-                        writer.writeheader()
-                    writer.writerow(resposta)
+                # Envia os resultados diretamente para a tabela "respostas"
+                supabase.table("respostas").insert(dados_resposta).execute()
                     
                 st.success(f"Excellent! Answers for Spectrum {espectro_selecionado} saved successfully.")
                 st.session_state.picos_marcados = set()
