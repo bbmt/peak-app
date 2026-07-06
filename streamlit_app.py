@@ -23,7 +23,7 @@ def iniciar_conexao() -> Client:
 try:
     supabase = iniciar_conexao()
 except Exception as e:
-    st.error("Erro ao conectar à base de dados. Verifique os seus Secrets no Streamlit Cloud.")
+    st.error(f"Erro detalhado ao conectar ao Supabase: {e}")
     st.stop()
 
 # ==========================================
@@ -47,7 +47,7 @@ if "espectro_atual" not in st.session_state:
 @st.cache_data
 def carregar_dados():
     # Certifique-se de que o nome do ficheiro corresponde ao que tem no repositório
-    dados_ruidosos = np.load('espectros_complexos_ruidosos.npy')
+    dados_ruidosos = np.load('espectros_complexos_ruidosos_ex50.npy')
     eixo_x = np.linspace(0, 1000, 1000)
     return dados_ruidosos, eixo_x
 
@@ -111,11 +111,13 @@ if not st.session_state.questionario_concluido:
                     "frequencia_ajuste": frequencia_ajuste
                 }
                 
-                # Envia de forma segura para a tabela "perfis" no Supabase
-                supabase.table("perfis").insert(dados_perfil).execute()
-                
-                st.session_state.questionario_concluido = True
-                st.rerun()
+                # Tenta enviar para a tabela "perfis" no Supabase e relata se houver erro
+                try:
+                    resposta_banco = supabase.table("perfis").insert(dados_perfil).execute()
+                    st.session_state.questionario_concluido = True
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Erro ao guardar o perfil no Supabase: {e}")
 
 # ==========================================
 # TELA 2: Análise e Identificação de Picos
@@ -161,6 +163,7 @@ else:
     for pico_x in st.session_state.picos_marcados:
         fig.add_vline(x=pico_x, line_width=2, line_dash="dash", line_color="red")
 
+    # Correção crítica no hovermode para permitir o clique exato
     fig.update_layout(
         title=f"Spectrum {espectro_selecionado}",
         xaxis_title="X-Axis", yaxis_title="Intensity",
@@ -216,9 +219,11 @@ else:
                     "valores_x": str([round(p, 3) for p in picos_ordenados])
                 }
                 
-                # Envia os resultados diretamente para a tabela "respostas"
-                supabase.table("respostas").insert(dados_resposta).execute()
-                    
-                st.success(f"Excellent! Answers for Spectrum {espectro_selecionado} saved successfully.")
-                st.session_state.picos_marcados = set()
-                st.rerun()
+                # Tenta enviar os resultados para a tabela "respostas" e captura potenciais erros
+                try:
+                    resposta_banco = supabase.table("respostas").insert(dados_resposta).execute()
+                    st.success(f"Excellent! Answers for Spectrum {espectro_selecionado} saved successfully.")
+                    st.session_state.picos_marcados = set()
+                    # O st.rerun() não é invocado imediatamente aqui para que a mensagem de sucesso seja lida
+                except Exception as e:
+                    st.error(f"Erro ao guardar a resposta no Supabase: {e}")
