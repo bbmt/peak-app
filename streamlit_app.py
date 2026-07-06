@@ -196,6 +196,7 @@ else:
         fig, 
         use_container_width=True, 
         on_select="rerun", 
+        selection_mode="points", # <--- A MÁGICA ESTÁ AQUI
         key=f"grafico_espectro_{espectro_selecionado}"
     )
 
