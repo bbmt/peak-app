@@ -183,45 +183,36 @@ else:
     for pico_x in st.session_state.picos_marcados:
         fig.add_vline(x=pico_x, line_width=2, line_dash="dash", line_color="red")
 
+    # ==========================================
+    # CORREÇÃO CRUCIAL AQUI
+    # ==========================================
     fig.update_layout(
         title=f"Spectrum {espectro_selecionado}",
         xaxis_title="X-Axis", yaxis_title="Intensity",
-        hovermode="x unified", 
+        hovermode="closest", # <--- Alterado de 'x unified' para 'closest'
         dragmode="zoom", 
         clickmode="event+select"
     )
 
-    # 2. Adição da 'key' (Muito importante para o Streamlit não perder o evento do clique)
     evento_grafico = st.plotly_chart(
         fig, 
         use_container_width=True, 
         on_select="rerun", 
-        selection_mode="points", # <--- A MÁGICA ESTÁ AQUI
+        selection_mode="points", # Mantém a ordem para aceitar cliques em pontos
         key=f"grafico_espectro_{espectro_selecionado}"
     )
 
-    # 3. Processamento robusto do clique para evitar loops
-    teve_mudanca = False
-    
-    if evento_grafico:
-        # Extrai os pontos dependendo de como a versão do Streamlit retorna o objeto
-        try:
-            pontos = evento_grafico.selection.points
-        except AttributeError:
-            pontos = evento_grafico.get("selection", {}).get("points", [])
-            
-        for pt in pontos:
-            # Captura a coordenada X clicada
-            x_val = pt.get("x") if isinstance(pt, dict) else pt["x"]
-            
-            # Se for um clique num lugar novo, adicionamos à memória
-            if x_val is not None and x_val not in st.session_state.picos_marcados:
+    # Lógica de extração segura dos cliques
+    if evento_grafico and len(evento_grafico.selection.points) > 0:
+        teve_mudanca = False
+        for ponto in evento_grafico.selection.points:
+            x_val = ponto["x"]
+            if x_val not in st.session_state.picos_marcados:
                 st.session_state.picos_marcados.add(x_val)
                 teve_mudanca = True
-
-    # Recarrega a tela apenas se um clique em um pico novo foi registrado
-    if teve_mudanca:
-        st.rerun()
+                
+        if teve_mudanca:
+            st.rerun()
 
     # ==========================================
     st.subheader("Summary of your Analysis")
