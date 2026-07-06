@@ -162,32 +162,67 @@ else:
     espectro_y = dados_ruidosos[espectro_selecionado]
 
     fig = go.Figure()
+    
+    # 1. Aumentamos o tamanho (size=8) e opacidade dos marcadores para facilitar o clique
     fig.add_trace(go.Scatter(
         x=eixo_x, y=np.real(espectro_y),
-        mode='lines+markers', marker=dict(size=4, opacity=0.3),
-        name='Real Part', line=dict(color='#1f77b4')
+        mode='lines+markers', 
+        marker=dict(size=8, opacity=0.4), 
+        name='Real Part', 
+        line=dict(color='#1f77b4')
     ))
+    
     fig.add_trace(go.Scatter(
         x=eixo_x, y=np.imag(espectro_y),
-        mode='lines', name='Imaginary Part', line=dict(color='#ff7f0e', dash='dot')
+        mode='lines', 
+        name='Imaginary Part', 
+        line=dict(color='#ff7f0e', dash='dot')
     ))
 
+    # Desenha as linhas dos picos já marcados
     for pico_x in st.session_state.picos_marcados:
         fig.add_vline(x=pico_x, line_width=2, line_dash="dash", line_color="red")
 
     fig.update_layout(
         title=f"Spectrum {espectro_selecionado}",
         xaxis_title="X-Axis", yaxis_title="Intensity",
-        hovermode="x unified", dragmode="zoom", clickmode="event+select"
+        hovermode="x unified", 
+        dragmode="zoom", 
+        clickmode="event+select"
     )
 
-    evento_grafico = st.plotly_chart(fig, use_container_width=True, on_select="rerun")
+    # 2. Adição da 'key' (Muito importante para o Streamlit não perder o evento do clique)
+    evento_grafico = st.plotly_chart(
+        fig, 
+        use_container_width=True, 
+        on_select="rerun", 
+        key=f"grafico_espectro_{espectro_selecionado}"
+    )
 
-    if evento_grafico and len(evento_grafico.selection.points) > 0:
-        for ponto in evento_grafico.selection.points:
-            st.session_state.picos_marcados.add(ponto["x"])
+    # 3. Processamento robusto do clique para evitar loops
+    teve_mudanca = False
+    
+    if evento_grafico:
+        # Extrai os pontos dependendo de como a versão do Streamlit retorna o objeto
+        try:
+            pontos = evento_grafico.selection.points
+        except AttributeError:
+            pontos = evento_grafico.get("selection", {}).get("points", [])
+            
+        for pt in pontos:
+            # Captura a coordenada X clicada
+            x_val = pt.get("x") if isinstance(pt, dict) else pt["x"]
+            
+            # Se for um clique num lugar novo, adicionamos à memória
+            if x_val is not None and x_val not in st.session_state.picos_marcados:
+                st.session_state.picos_marcados.add(x_val)
+                teve_mudanca = True
+
+    # Recarrega a tela apenas se um clique em um pico novo foi registrado
+    if teve_mudanca:
         st.rerun()
 
+    # ==========================================
     st.subheader("Summary of your Analysis")
     picos_ordenados = sorted(list(st.session_state.picos_marcados))
     
