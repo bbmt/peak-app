@@ -32,7 +32,7 @@ if "espectro_atual" not in st.session_state:
 # ==========================================
 @st.cache_data
 def carregar_dados():
-    dados_ruidosos = np.load('espectros_complexos_ruidosos_ex50.npy')
+    dados_ruidosos = np.load('espectros_complexos_ruidosos.npy')
     eixo_x = np.linspace(0, 1000, 1000)
     return dados_ruidosos, eixo_x
 
