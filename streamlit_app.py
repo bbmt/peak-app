@@ -16,7 +16,6 @@ st.set_page_config(page_title="Peak Identification", layout="wide")
 # ==========================================
 @st.cache_resource
 def iniciar_conexao() -> Client:
-    # Acede às chaves configuradas nos Secrets do Streamlit
     url = st.secrets["SUPABASE_URL"]
     key = st.secrets["SUPABASE_KEY"]
     return create_client(url, key)
@@ -47,7 +46,6 @@ if "espectro_atual" not in st.session_state:
 # ==========================================
 @st.cache_data
 def carregar_dados():
-    # Certifique-se de que o nome do ficheiro corresponde ao que tem no repositório
     dados_ruidosos = np.load('espectros_complexos_ruidosos.npy')
     eixo_x = np.linspace(0, 1000, 1000)
     return dados_ruidosos, eixo_x
@@ -110,7 +108,6 @@ if not st.session_state.questionario_concluido:
             if titulacao is None or area_atuacao is None or experiencia_espectroscopia is None or frequencia_ajuste is None or conhecimento is None:
                 st.error("Please, fill in all mandatory fields before proceeding.")
             else:
-                # Prepara os dados num dicionário
                 dados_perfil = {
                     "data_hora": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                     "hash_pesquisador": st.session_state.hash_pesquisador,
@@ -121,9 +118,8 @@ if not st.session_state.questionario_concluido:
                     "conhecimento": conhecimento,
                 }
                 
-                # Tenta enviar para a tabela "perfis" no Supabase e relata se houver erro
                 try:
-                    resposta_banco = supabase.table("perfis").insert(dados_perfil).execute()
+                    supabase.table("perfis").insert(dados_perfil).execute()
                     st.session_state.questionario_concluido = True
                     st.rerun()
                 except Exception as e:
@@ -147,38 +143,13 @@ else:
         st.stop()
 
     espectro_selecionado = st.session_state.espectro_atual
-
-    st.markdown("""
-    **Instructions:**
-    1. Navigate through the graphs below (Real and Imaginary parts).
-    2. **Click directly on the curve** on either graph where you identify a peak. A red line will appear.
-    3. You must mark **at least one peak** before submitting.
-    4. Once you have marked all peaks for this spectrum, click on **Submit Answers** to proceed to the next one.
-    """)
-    
-    st.markdown(f"### Spectrum {espectro_selecionado + 1} of {total_espectros} (ID: {espectro_selecionado})")
-
-    espectro_y = dados_ruidosos[espectro_selecionado]
-
-    # --- Configurações comuns de Layout ---
-    layout_comum = dict(
-        xaxis_title="X-Axis", yaxis_title="Intensity",
-        hovermode="closest", dragmode="zoom", clickmode="event+select"
-    )
-
-    # Verifica se o utilizador já completou todos os espectros
-    if st.session_state.espectro_atual >= total_espectros:
-        st.success("🎉 Congratulations! You have successfully analyzed all spectra. Thank you for your participation!")
-        st.stop()
-
-    espectro_selecionado = st.session_state.espectro_atual
     
     st.markdown(f"### Spectrum {espectro_selecionado + 1} of {total_espectros} (ID: {espectro_selecionado})")
 
     # ==========================================
     # Painel Superior (Instruções + Ações)
     # ==========================================
-    col_instrucoes, col_acoes = st.columns([1.2, 1]) # Coluna esquerda ligeiramente maior para o texto
+    col_instrucoes, col_acoes = st.columns([1.2, 1]) 
 
     with col_instrucoes:
         st.markdown("""
@@ -198,8 +169,8 @@ else:
         else:
             st.info("Click on the graph below to mark the peaks.")
 
-        # Sub-colunas para alinhar os botões lado a lado
         col_btn1, col_btn2 = st.columns(2)
+        
         with col_btn1:
             if st.button("🗑️ Clear All", use_container_width=True):
                 st.session_state.picos_marcados = set()
@@ -227,7 +198,7 @@ else:
                     except Exception as e:
                         st.error(f"Erro ao guardar a resposta no Supabase: {e}")
 
-    st.divider() # Adiciona uma linha horizontal para separar o painel de cima do gráfico
+    st.divider() 
 
     # ==========================================
     # Gráficos (Subplots)
@@ -290,46 +261,3 @@ else:
 
     if teve_mudanca:
         st.rerun()
-
-    # --- Resumo e Submissão ---
-    st.subheader("Summary of your Analysis")
-    picos_ordenados = sorted(list(st.session_state.picos_marcados))
-    
-    if picos_ordenados:
-        st.write("Visually marked positions:", [round(p, 2) for p in picos_ordenados])
-    else:
-        st.info("Click on either graph to mark the peaks. At least one peak is required.")
-
-    col_btn1, col_btn2 = st.columns([1, 5])
-    with col_btn1:
-        if st.button("🗑️ Clear All"):
-            st.session_state.picos_marcados = set()
-            st.rerun()
-
-    with col_btn2:
-        if st.button("✅ Submit Answers"):
-            if not picos_ordenados:
-                # Regra estrita: Pelo menos um pico obrigatório
-                st.warning("You must mark at least one peak before proceeding!")
-            else:
-                dados_resposta = {
-                    "data_hora": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                    "hash_pesquisador": st.session_state.hash_pesquisador,
-                    "espectro_id": espectro_selecionado,
-                    "qtd_picos": len(picos_ordenados),
-                    "valores_x": str([round(p, 3) for p in picos_ordenados])
-                }
-                
-                try:
-                    supabase.table("respostas").insert(dados_resposta).execute()
-                    
-                    # Limpa as marcações e avança o índice
-                    st.session_state.picos_marcados = set()
-                    st.session_state.espectro_atual += 1
-                    
-                    # Mensagem temporal via st.toast (melhor experiência na progressão rápida)
-                    st.toast(f"Answers for Spectrum {espectro_selecionado} saved! Moving to the next...", icon="✅")
-                    
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"Erro ao guardar a resposta no Supabase: {e}")
