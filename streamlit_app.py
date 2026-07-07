@@ -73,6 +73,7 @@ if not st.session_state.questionario_concluido:
                 ["Bachelor's Degree (in progress or completed)", "Master's Degree", "Ph.D."],
                 index=None, placeholder="Select an option..."
             )
+            st.markdown("You can type if you cannot find an option")
             area_atuacao = st.selectbox(
                 "What is your primary field of research?",
                 ["Materials Science", "Chemistry", "Physics", "Engineering", "Biology", "Geology", "Other"],
@@ -90,15 +91,22 @@ if not st.session_state.questionario_concluido:
                 ],
                 index=None
             )
-            frequencia_ajuste = st.select_slider(
+            frequencia_ajuste = st.radio(
                 "How often do you perform curve fitting in your research?",
-                options=["Never", "Rarely", "Monthly", "Weekly", "Daily"]
+                ["Never", "Rarely", "Monthly", "Weekly", "Daily"]
             )
 
+            conhecimento = st.radio(
+                "What is your level of experience with Scanning Near-Field Optical Microscopy (SNOM)?",
+                ["Beginner (I am familiar with the technique or have performed a few measurements)",
+                 "Intermediate (I have conducted several measurements, though I occasionally struggle with data analysis)",
+                 "Advanced (I have extensive measurement experience and a solid understanding of the results)",
+                 "Expert (This is my primary field of research, and I have a comprehensive mastery of the technique)"]
+            )
         botao_iniciar = st.form_submit_button("Save and Start Analysis")
         
         if botao_iniciar:
-            if titulacao is None or area_atuacao is None or experiencia_espectroscopia is None:
+            if titulacao is None or area_atuacao is None or experiencia_espectroscopia is None or frequencia_ajuste is None or conhecimento is None:
                 st.error("Please, fill in all mandatory fields before proceeding.")
             else:
                 # Prepara os dados num dicionário
@@ -108,7 +116,8 @@ if not st.session_state.questionario_concluido:
                     "titulacao": titulacao,
                     "area_atuacao": area_atuacao,
                     "experiencia": experiencia_espectroscopia,
-                    "frequencia_ajuste": frequencia_ajuste
+                    "frequencia_ajuste": frequencia_ajuste,
+                    "conhecimento": conhecimento,
                 }
                 
                 # Tenta enviar para a tabela "perfis" no Supabase e relata se houver erro
@@ -131,73 +140,99 @@ else:
             del st.session_state[key]
         st.rerun()
 
+    # Verifica se o utilizador já completou todos os espectros
+    if st.session_state.espectro_atual >= total_espectros:
+        st.success("🎉 Congratulations! You have successfully analyzed all spectra. Thank you for your participation!")
+        st.stop()
+
+    espectro_selecionado = st.session_state.espectro_atual
+
     st.markdown("""
     **Instructions:**
-    1. Navigate through the graph below.
-    2. **Click directly on the curve** where you identify a peak. A red line will appear.
-    3. Once you have marked all peaks for this spectrum, click on **Submit Answers**.
+    1. Navigate through the graphs below (Real and Imaginary parts).
+    2. **Click directly on the curve** on either graph where you identify a peak. A red line will appear.
+    3. You must mark **at least one peak** before submitting.
+    4. Once you have marked all peaks for this spectrum, click on **Submit Answers** to proceed to the next one.
     """)
-
-    col1, col2 = st.columns([1, 2])
-    with col1:
-        espectro_selecionado = st.selectbox("Select the Spectrum:", range(total_espectros))
-
-    if espectro_selecionado != st.session_state.espectro_atual:
-        st.session_state.espectro_atual = espectro_selecionado
-        st.session_state.picos_marcados = set()
-        st.rerun()
+    
+    st.markdown(f"### Spectrum {espectro_selecionado + 1} of {total_espectros} (ID: {espectro_selecionado})")
 
     espectro_y = dados_ruidosos[espectro_selecionado]
 
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(
-        x=eixo_x, y=np.real(espectro_y),
-        mode='lines+markers', marker=dict(size=8, opacity=0.4),
-        name='Real Part', line=dict(color='#1f77b4')
-    ))
-    fig.add_trace(go.Scatter(
-        x=eixo_x, y=np.imag(espectro_y),
-        mode='lines', name='Imaginary Part', line=dict(color='#ff7f0e', dash='dot')
-    ))
-
-    for pico_x in st.session_state.picos_marcados:
-        fig.add_vline(x=pico_x, line_width=2, line_dash="dash", line_color="red")
-
-    # Correção crítica no hovermode para permitir o clique exato
-    fig.update_layout(
-        title=f"Spectrum {espectro_selecionado}",
+    # --- Configurações comuns de Layout ---
+    layout_comum = dict(
         xaxis_title="X-Axis", yaxis_title="Intensity",
         hovermode="closest", dragmode="zoom", clickmode="event+select"
     )
 
-    evento_grafico = st.plotly_chart(
-        fig, use_container_width=True, on_select="rerun", 
-        selection_mode="points", key=f"graf_esp_{espectro_selecionado}"
+    # --- Gráfico 1: Parte Real ---
+    fig_real = go.Figure()
+    fig_real.add_trace(go.Scatter(
+        x=eixo_x, y=np.real(espectro_y),
+        mode='lines+markers', marker=dict(size=8, opacity=0.4),
+        name='Real Part', line=dict(color='#1f77b4')
+    ))
+    # Sincroniza linhas vermelhas
+    for pico_x in st.session_state.picos_marcados:
+        fig_real.add_vline(x=pico_x, line_width=2, line_dash="dash", line_color="red")
+    
+    fig_real.update_layout(title="Real Part", **layout_comum)
+
+    # --- Gráfico 2: Parte Imaginária ---
+    fig_imag = go.Figure()
+    fig_imag.add_trace(go.Scatter(
+        x=eixo_x, y=np.imag(espectro_y),
+        mode='lines+markers', marker=dict(size=8, opacity=0.4), # Marcadores adicionados para permitir clique
+        name='Imaginary Part', line=dict(color='#ff7f0e', dash='dot')
+    ))
+    # Sincroniza linhas vermelhas
+    for pico_x in st.session_state.picos_marcados:
+        fig_imag.add_vline(x=pico_x, line_width=2, line_dash="dash", line_color="red")
+        
+    fig_imag.update_layout(title="Imaginary Part", **layout_comum)
+
+    # Renderiza os gráficos
+    evento_real = st.plotly_chart(
+        fig_real, use_container_width=True, on_select="rerun", 
+        selection_mode="points", key=f"graf_real_{espectro_selecionado}"
+    )
+    
+    evento_imag = st.plotly_chart(
+        fig_imag, use_container_width=True, on_select="rerun", 
+        selection_mode="points", key=f"graf_imag_{espectro_selecionado}"
     )
 
-    if evento_grafico and len(evento_grafico.selection.points) > 0:
+    # --- Função para processar os cliques em ambos os gráficos ---
+    def processar_cliques(evento_grafico):
         teve_mudanca = False
-        try:
-            pontos = evento_grafico.selection.points
-        except AttributeError:
-            pontos = evento_grafico.get("selection", {}).get("points", [])
-            
-        for pt in pontos:
-            x_val = pt.get("x") if isinstance(pt, dict) else pt["x"]
-            if x_val is not None and x_val not in st.session_state.picos_marcados:
-                st.session_state.picos_marcados.add(x_val)
-                teve_mudanca = True
+        if evento_grafico and len(evento_grafico.selection.points) > 0:
+            try:
+                pontos = evento_grafico.selection.points
+            except AttributeError:
+                pontos = evento_grafico.get("selection", {}).get("points", [])
                 
-        if teve_mudanca:
-            st.rerun()
+            for pt in pontos:
+                x_val = pt.get("x") if isinstance(pt, dict) else pt["x"]
+                if x_val is not None and x_val not in st.session_state.picos_marcados:
+                    st.session_state.picos_marcados.add(x_val)
+                    teve_mudanca = True
+        return teve_mudanca
 
+    # Verifica se algum gráfico registou novos cliques
+    mudanca_real = processar_cliques(evento_real)
+    mudanca_imag = processar_cliques(evento_imag)
+
+    if mudanca_real or mudanca_imag:
+        st.rerun()
+
+    # --- Resumo e Submissão ---
     st.subheader("Summary of your Analysis")
     picos_ordenados = sorted(list(st.session_state.picos_marcados))
     
     if picos_ordenados:
         st.write("Visually marked positions:", [round(p, 2) for p in picos_ordenados])
     else:
-        st.info("Click on the graph to mark the peaks.")
+        st.info("Click on either graph to mark the peaks. At least one peak is required.")
 
     col_btn1, col_btn2 = st.columns([1, 5])
     with col_btn1:
@@ -208,9 +243,9 @@ else:
     with col_btn2:
         if st.button("✅ Submit Answers"):
             if not picos_ordenados:
-                st.warning("You haven't marked any peaks!")
+                # Regra estrita: Pelo menos um pico obrigatório
+                st.warning("You must mark at least one peak before proceeding!")
             else:
-                # Prepara as respostas num dicionário para a tabela de respostas
                 dados_resposta = {
                     "data_hora": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                     "hash_pesquisador": st.session_state.hash_pesquisador,
@@ -219,11 +254,16 @@ else:
                     "valores_x": str([round(p, 3) for p in picos_ordenados])
                 }
                 
-                # Tenta enviar os resultados para a tabela "respostas" e captura potenciais erros
                 try:
-                    resposta_banco = supabase.table("respostas").insert(dados_resposta).execute()
-                    st.success(f"Excellent! Answers for Spectrum {espectro_selecionado} saved successfully.")
+                    supabase.table("respostas").insert(dados_resposta).execute()
+                    
+                    # Limpa as marcações e avança o índice
                     st.session_state.picos_marcados = set()
-                    # O st.rerun() não é invocado imediatamente aqui para que a mensagem de sucesso seja lida
+                    st.session_state.espectro_atual += 1
+                    
+                    # Mensagem temporal via st.toast (melhor experiência na progressão rápida)
+                    st.toast(f"Answers for Spectrum {espectro_selecionado} saved! Moving to the next...", icon="✅")
+                    
+                    st.rerun()
                 except Exception as e:
                     st.error(f"Erro ao guardar a resposta no Supabase: {e}")
