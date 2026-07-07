@@ -1,6 +1,7 @@
 import streamlit as st
 import numpy as np
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 from datetime import datetime
 import uuid
 from supabase import create_client, Client
@@ -165,64 +166,69 @@ else:
         hovermode="closest", dragmode="zoom", clickmode="event+select"
     )
 
-    # --- Gráfico 1: Parte Real ---
-    fig_real = go.Figure()
-    fig_real.add_trace(go.Scatter(
+    # --- Criação dos Subplots (Gráficos Unidos) ---
+    # shared_xaxes=True sincroniza o zoom; vertical_spacing controla a distância entre eles.
+    fig = make_subplots(
+        rows=2, cols=1, 
+        shared_xaxes=True, 
+        vertical_spacing=0.08, # Altere este valor (ex: 0.05 ou 0.1) para ajustar o espaço!
+        subplot_titles=("Real Part", "Imaginary Part")
+    )
+
+    # Adiciona a Parte Real (Linha 1)
+    fig.add_trace(go.Scatter(
         x=eixo_x, y=np.real(espectro_y),
         mode='lines+markers', marker=dict(size=8, opacity=0.4),
         name='Real Part', line=dict(color='#1f77b4')
-    ))
-    # Sincroniza linhas vermelhas
-    for pico_x in st.session_state.picos_marcados:
-        fig_real.add_vline(x=pico_x, line_width=2, line_dash="dash", line_color="red")
-    
-    fig_real.update_layout(title="Real Part", **layout_comum)
+    ), row=1, col=1)
 
-    # --- Gráfico 2: Parte Imaginária ---
-    fig_imag = go.Figure()
-    fig_imag.add_trace(go.Scatter(
+    # Adiciona a Parte Imaginária (Linha 2)
+    fig.add_trace(go.Scatter(
         x=eixo_x, y=np.imag(espectro_y),
-        mode='lines+markers', marker=dict(size=8, opacity=0.4), # Marcadores adicionados para permitir clique
+        mode='lines+markers', marker=dict(size=8, opacity=0.4),
         name='Imaginary Part', line=dict(color='#ff7f0e', dash='dot')
-    ))
-    # Sincroniza linhas vermelhas
+    ), row=2, col=1)
+
+    # Sincroniza as linhas vermelhas dos picos em AMBOS os subplots
     for pico_x in st.session_state.picos_marcados:
-        fig_imag.add_vline(x=pico_x, line_width=2, line_dash="dash", line_color="red")
-        
-    fig_imag.update_layout(title="Imaginary Part", **layout_comum)
+        fig.add_vline(x=pico_x, line_width=2, line_dash="dash", line_color="red", row='all', col='all')
 
-    # Renderiza os gráficos
-    evento_real = st.plotly_chart(
-        fig_real, use_container_width=True, on_select="rerun", 
-        selection_mode="points", key=f"graf_real_{espectro_selecionado}"
-    )
-    
-    evento_imag = st.plotly_chart(
-        fig_imag, use_container_width=True, on_select="rerun", 
-        selection_mode="points", key=f"graf_imag_{espectro_selecionado}"
+    # Configurações globais de layout e redução de margens
+    fig.update_layout(
+        hovermode="closest", 
+        dragmode="zoom", 
+        clickmode="event+select",
+        height=600, # Altura total da figura combinada
+        margin=dict(l=40, r=40, t=60, b=40), # Reduz as margens em branco ao redor
+        showlegend=False # Oculta a legenda lateral para dar mais espaço aos gráficos
     )
 
-    # --- Função para processar os cliques em ambos os gráficos ---
-    def processar_cliques(evento_grafico):
-        teve_mudanca = False
-        if evento_grafico and len(evento_grafico.selection.points) > 0:
-            try:
-                pontos = evento_grafico.selection.points
-            except AttributeError:
-                pontos = evento_grafico.get("selection", {}).get("points", [])
-                
-            for pt in pontos:
-                x_val = pt.get("x") if isinstance(pt, dict) else pt["x"]
-                if x_val is not None and x_val not in st.session_state.picos_marcados:
-                    st.session_state.picos_marcados.add(x_val)
-                    teve_mudanca = True
-        return teve_mudanca
+    # Nomes dos eixos
+    fig.update_yaxes(title_text="Intensity", row=1, col=1)
+    fig.update_yaxes(title_text="Intensity", row=2, col=1)
+    fig.update_xaxes(title_text="X-Axis", row=2, col=1) # Eixo X apenas no gráfico de baixo
 
-    # Verifica se algum gráfico registou novos cliques
-    mudanca_real = processar_cliques(evento_real)
-    mudanca_imag = processar_cliques(evento_imag)
+    # Renderiza o gráfico único
+    evento_grafico = st.plotly_chart(
+        fig, use_container_width=True, on_select="rerun", 
+        selection_mode="points", key=f"graf_esp_{espectro_selecionado}"
+    )
 
-    if mudanca_real or mudanca_imag:
+    # --- Função para processar os cliques no gráfico único ---
+    teve_mudanca = False
+    if evento_grafico and len(evento_grafico.selection.points) > 0:
+        try:
+            pontos = evento_grafico.selection.points
+        except AttributeError:
+            pontos = evento_grafico.get("selection", {}).get("points", [])
+            
+        for pt in pontos:
+            x_val = pt.get("x") if isinstance(pt, dict) else pt["x"]
+            if x_val is not None and x_val not in st.session_state.picos_marcados:
+                st.session_state.picos_marcados.add(x_val)
+                teve_mudanca = True
+
+    if teve_mudanca:
         st.rerun()
 
     # --- Resumo e Submissão ---
