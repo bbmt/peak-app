@@ -166,55 +166,115 @@ else:
         hovermode="closest", dragmode="zoom", clickmode="event+select"
     )
 
-    # --- Criação dos Subplots (Gráficos Unidos) ---
-    # shared_xaxes=True sincroniza o zoom; vertical_spacing controla a distância entre eles.
+    # Verifica se o utilizador já completou todos os espectros
+    if st.session_state.espectro_atual >= total_espectros:
+        st.success("🎉 Congratulations! You have successfully analyzed all spectra. Thank you for your participation!")
+        st.stop()
+
+    espectro_selecionado = st.session_state.espectro_atual
+    
+    st.markdown(f"### Spectrum {espectro_selecionado + 1} of {total_espectros} (ID: {espectro_selecionado})")
+
+    # ==========================================
+    # Painel Superior (Instruções + Ações)
+    # ==========================================
+    col_instrucoes, col_acoes = st.columns([1.2, 1]) # Coluna esquerda ligeiramente maior para o texto
+
+    with col_instrucoes:
+        st.markdown("""
+        **Instructions:**
+        1. Navigate through the graphs below (Real and Imaginary parts).
+        2. **Click directly on the curve** on either graph where you identify a peak. A red line will appear.
+        3. You must mark **at least one peak** before submitting.
+        4. Once you have marked all peaks for this spectrum, click on **Submit Answers** to proceed to the next one.
+        """)
+
+    with col_acoes:
+        st.subheader("Summary of your Analysis")
+        picos_ordenados = sorted(list(st.session_state.picos_marcados))
+        
+        if picos_ordenados:
+            st.write("Visually marked positions:", [round(p, 2) for p in picos_ordenados])
+        else:
+            st.info("Click on the graph below to mark the peaks.")
+
+        # Sub-colunas para alinhar os botões lado a lado
+        col_btn1, col_btn2 = st.columns(2)
+        with col_btn1:
+            if st.button("🗑️ Clear All", use_container_width=True):
+                st.session_state.picos_marcados = set()
+                st.rerun()
+
+        with col_btn2:
+            if st.button("✅ Submit Answers", use_container_width=True):
+                if not picos_ordenados:
+                    st.warning("You must mark at least one peak before proceeding!")
+                else:
+                    dados_resposta = {
+                        "data_hora": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                        "hash_pesquisador": st.session_state.hash_pesquisador,
+                        "espectro_id": espectro_selecionado,
+                        "qtd_picos": len(picos_ordenados),
+                        "valores_x": str([round(p, 3) for p in picos_ordenados])
+                    }
+                    
+                    try:
+                        supabase.table("respostas").insert(dados_resposta).execute()
+                        st.session_state.picos_marcados = set()
+                        st.session_state.espectro_atual += 1
+                        st.toast(f"Answers for Spectrum {espectro_selecionado} saved! Moving to the next...", icon="✅")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Erro ao guardar a resposta no Supabase: {e}")
+
+    st.divider() # Adiciona uma linha horizontal para separar o painel de cima do gráfico
+
+    # ==========================================
+    # Gráficos (Subplots)
+    # ==========================================
+    espectro_y = dados_ruidosos[espectro_selecionado]
+
     fig = make_subplots(
         rows=2, cols=1, 
         shared_xaxes=True, 
-        vertical_spacing=0.08, # Altere este valor (ex: 0.05 ou 0.1) para ajustar o espaço!
+        vertical_spacing=0.08, 
         subplot_titles=("Real Part", "Imaginary Part")
     )
 
-    # Adiciona a Parte Real (Linha 1)
     fig.add_trace(go.Scatter(
         x=eixo_x, y=np.real(espectro_y),
         mode='lines+markers', marker=dict(size=8, opacity=0.4),
         name='Real Part', line=dict(color='#1f77b4')
     ), row=1, col=1)
 
-    # Adiciona a Parte Imaginária (Linha 2)
     fig.add_trace(go.Scatter(
         x=eixo_x, y=np.imag(espectro_y),
         mode='lines+markers', marker=dict(size=8, opacity=0.4),
         name='Imaginary Part', line=dict(color='#ff7f0e', dash='dot')
     ), row=2, col=1)
 
-    # Sincroniza as linhas vermelhas dos picos em AMBOS os subplots
     for pico_x in st.session_state.picos_marcados:
         fig.add_vline(x=pico_x, line_width=2, line_dash="dash", line_color="red", row='all', col='all')
 
-    # Configurações globais de layout e redução de margens
     fig.update_layout(
         hovermode="closest", 
         dragmode="zoom", 
         clickmode="event+select",
-        height=600, # Altura total da figura combinada
-        margin=dict(l=40, r=40, t=60, b=40), # Reduz as margens em branco ao redor
-        showlegend=False # Oculta a legenda lateral para dar mais espaço aos gráficos
+        height=600, 
+        margin=dict(l=40, r=40, t=60, b=40), 
+        showlegend=False 
     )
 
-    # Nomes dos eixos
     fig.update_yaxes(title_text="Intensity", row=1, col=1)
     fig.update_yaxes(title_text="Intensity", row=2, col=1)
-    fig.update_xaxes(title_text="X-Axis", row=2, col=1) # Eixo X apenas no gráfico de baixo
+    fig.update_xaxes(title_text="X-Axis", row=2, col=1)
 
-    # Renderiza o gráfico único
     evento_grafico = st.plotly_chart(
         fig, use_container_width=True, on_select="rerun", 
         selection_mode="points", key=f"graf_esp_{espectro_selecionado}"
     )
 
-    # --- Função para processar os cliques no gráfico único ---
+    # Processamento de cliques no gráfico
     teve_mudanca = False
     if evento_grafico and len(evento_grafico.selection.points) > 0:
         try:
