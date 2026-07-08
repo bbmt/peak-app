@@ -5,6 +5,7 @@ from plotly.subplots import make_subplots
 from datetime import datetime
 import uuid
 from supabase import create_client, Client
+import time
 
 # ==========================================
 # Configuração da Página
@@ -62,6 +63,8 @@ if not st.session_state.questionario_concluido:
     st.markdown("The data collected is anonymous and by answering you agree to share your responses with the researchers.")
     st.markdown("The data will be used for research purposes only. You may request the result by emailing brunobassi@ifsc.usp.br")
     st.markdown("Before starting the peak identification process, please fill in the information below.")
+    st.markdown("Please answer it by yourself without the help of other. It is best to answer this questionnaire on a computer.")
+    st.markdown("The estimated time of completion is around 15-20 minutes.")
     
     st.info(f"🔒 Your anonymous ID for this session is: **{st.session_state.hash_pesquisador}**")
     
@@ -145,11 +148,6 @@ if not st.session_state.questionario_concluido:
 else:
     st.title("🎯 Challenge: Lorentzian Peak Identification")
     st.markdown(f"**Researcher (Anonymous ID):** `{st.session_state.hash_pesquisador}`")
-    
-    if st.button("Logout / New User"):
-        for key in list(st.session_state.keys()):
-            del st.session_state[key]
-        st.rerun()
 
     # Verifica se o utilizador já completou todos os espectros
     if st.session_state.espectro_atual >= total_espectros:
@@ -158,6 +156,13 @@ else:
 
     espectro_selecionado = st.session_state.espectro_atual
     
+    # ---------------------------------------------------------
+    # NOVO: Lógica para iniciar o cronômetro apenas uma vez por espectro
+    # ---------------------------------------------------------
+    if "espectro_medido_id" not in st.session_state or st.session_state.espectro_medido_id != espectro_selecionado:
+        st.session_state.tempo_inicio_espectro = time.time()
+        st.session_state.espectro_medido_id = espectro_selecionado
+
     st.markdown(f"### Spectrum {espectro_selecionado + 1} of {total_espectros} (ID: {espectro_selecionado})")
 
     # ==========================================
@@ -195,12 +200,19 @@ else:
                 if not picos_ordenados:
                     st.warning("You must mark at least one peak before proceeding!")
                 else:
+                    # ---------------------------------------------------------
+                    # NOVO: Calcular tempo decorrido no momento da submissão
+                    # ---------------------------------------------------------
+                    tempo_decorrido = time.time() - st.session_state.tempo_inicio_espectro
+                    
                     dados_resposta = {
                         "data_hora": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                         "hash_pesquisador": st.session_state.hash_pesquisador,
                         "espectro_id": espectro_selecionado,
                         "qtd_picos": len(picos_ordenados),
-                        "valores_x": str([round(p, 3) for p in picos_ordenados])
+                        "valores_x": str([round(p, 3) for p in picos_ordenados]),
+                        # Adicionando o tempo em segundos com duas casas decimais
+                        "tempo_resposta_segundos": round(tempo_decorrido, 2) 
                     }
                     
                     try:
