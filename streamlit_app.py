@@ -57,9 +57,11 @@ total_espectros = len(dados_ruidosos)
 # TELA 1: Questionário Inicial
 # ==========================================
 if not st.session_state.questionario_concluido:
-    st.title("📋 Initial Questionnaire")
-    st.markdown("This is an experiment to evaluate how humans deal with peak identification. \n The objective is to compare human answers with an algorithm we are developing.")
-    st.markdown("Before starting the peak identification process, please fill in the information below for analysis purposes.")
+    st.title("📋 Are Humans better than AI at identifying peaks on spectroscopy?")
+    st.markdown("This questionnaire is part of an experiment to evaluate how humans deal with peak identification. The objective is to compare human answers with an algorithm we are developing.")
+    st.markdown("The data collected is anonymous and by answering you agree to share your responses with the researchers.")
+    st.markdown("The data will be used for research purposes only. You may request the result by emailing brunobassi@ifsc.usp.br")
+    st.markdown("Before starting the peak identification process, please fill in the information below.")
     
     st.info(f"🔒 Your anonymous ID for this session is: **{st.session_state.hash_pesquisador}**")
     
@@ -72,9 +74,16 @@ if not st.session_state.questionario_concluido:
                 ["Bachelor's Degree (in progress or completed)", "Master's Degree", "Ph.D."],
                 index=None, placeholder="Select an option..."
             )
-            st.markdown("You can type if you cannot find an option")
+
+            formacao = st.multiselect(
+                "What is your educational background? (You can type if you cannot find an option)",
+                ["Materials Science", "Chemistry", "Physics", "Engineering", "Biology", "Geology"],
+                max_selections =6,
+                accept_new_options=True
+            )
+
             area_atuacao = st.selectbox(
-                "What is your primary field of research?",
+                "What is your primary field of research? (You can type if you cannot find an option)",
                 ["Materials Science", "Chemistry", "Physics", "Engineering", "Biology", "Geology", "Other"],
                 index=None, placeholder="Select an option or type a new one...", accept_new_options=True 
             )
@@ -90,17 +99,21 @@ if not st.session_state.questionario_concluido:
                 ],
                 index=None
             )
-            frequencia_ajuste = st.radio(
-                "How often do you perform curve fitting in your research?",
-                ["Never", "Rarely", "Monthly", "Weekly", "Daily"]
-            )
+
 
             conhecimento = st.radio(
                 "What is your level of experience with Scanning Near-Field Optical Microscopy (SNOM)?",
                 ["Beginner (I am familiar with the technique or have performed a few measurements)",
                  "Intermediate (I have conducted several measurements, though I occasionally struggle with data analysis)",
                  "Advanced (I have extensive measurement experience and a solid understanding of the results)",
-                 "Expert (This is my primary field of research, and I have a comprehensive mastery of the technique)"]
+                 "Expert (This is my primary field of research, and I have a comprehensive mastery of the technique)"],
+                 index=None
+            )
+
+            frequencia_ajuste = st.radio(
+                "How often do you perform curve fitting in your research?",
+                ["Never", "Rarely", "Monthly", "Weekly", "Daily"],
+                index=None
             )
         botao_iniciar = st.form_submit_button("Save and Start Analysis")
         
