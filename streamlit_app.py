@@ -83,7 +83,7 @@ if not st.session_state.questionario_concluido:
             )
 
             area_atuacao = st.selectbox(
-                "What is your primary field of research? (You can type if you cannot find an option)",
+                "What is currently your primary field of research? (You can type if you cannot find an option)",
                 ["Materials Science", "Chemistry", "Physics", "Engineering", "Biology", "Geology", "Other"],
                 index=None, placeholder="Select an option or type a new one...", accept_new_options=True 
             )
@@ -129,6 +129,7 @@ if not st.session_state.questionario_concluido:
                     "experiencia": experiencia_espectroscopia,
                     "frequencia_ajuste": frequencia_ajuste,
                     "conhecimento": conhecimento,
+                    "formacao": formacao,
                 }
                 
                 try:
