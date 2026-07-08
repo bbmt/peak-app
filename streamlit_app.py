@@ -59,12 +59,13 @@ total_espectros = len(dados_ruidosos)
 # ==========================================
 if not st.session_state.questionario_concluido:
     st.title("📋 Are Humans better than AI at identifying peaks on spectroscopy?")
-    st.markdown("This questionnaire is part of an experiment to evaluate how humans deal with peak identification. The objective is to compare human answers with an algorithm we are developing.")
-    st.markdown("The data collected is anonymous and by answering you agree to share your responses with the researchers.")
-    st.markdown("The data will be used for research purposes only. You may request the result by emailing brunobassi@ifsc.usp.br")
-    st.markdown("Before starting the peak identification process, please fill in the information below.")
-    st.markdown("Please answer it by yourself without the help of other. It is best to answer this questionnaire on a computer.")
-    st.markdown("The estimated time of completion is around 15-20 minutes.")
+    st.markdown("""This questionnaire is part of an experiment to evaluate how humans deal with peak identification. The objective is to compare human answers with an algorithm we are developing."
+                The algorithm, if successful, will be available for users at IMBUIA beamline.
+                The data collected is anonymous and by answering you agree to share your responses with the researchers.
+                The data will be used for research purposes only. You may request the results by emailing brunobassi@ifsc.usp.br
+                Before starting the peak identification process, please fill in the information below.
+                Please answer it by yourself without the help of others. It is best to answer this questionnaire on a computer.
+                The estimated time of completion is around 15-20 minutes. *We are collecting your time response,so please try to focus only on this task*""")
     
     st.info(f"🔒 Your anonymous ID for this session is: **{st.session_state.hash_pesquisador}**")
     
@@ -175,7 +176,7 @@ else:
         **Instructions:**
         1. Navigate through the graphs below (Real and Imaginary parts).
         2. **Click directly on the curve** on either graph where you identify a peak. A red line will appear.
-        3. You must mark **at least one peak** before submitting.
+        3. You must mark **at least one peak** before submitting. There are up to 5 peaks in each image.
         4. Once you have marked all peaks for this spectrum, click on **Submit Answers** to proceed to the next one.
         """)
 
